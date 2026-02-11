@@ -8,6 +8,7 @@ from datetime import datetime, date, timedelta
 from ..database import get_db
 from .tide_calculator import TideCalculator
 from .sun_calculator import SunCalculator
+from .tide_scraper import scrape_and_overlay
 from ..config import LOCATIONS, PRECALC_DAYS
 
 logger = logging.getLogger(__name__)
@@ -75,3 +76,6 @@ def build_cache():
     logger.info(
         f"Cache built: {total_tides} tide events, {total_hourly} hourly levels, {total_sun} sun times"
     )
+
+    # Overlay exact ADMIRALTY predictions for the next ~7 days
+    scrape_and_overlay()

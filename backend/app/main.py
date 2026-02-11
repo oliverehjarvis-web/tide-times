@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -8,15 +9,32 @@ from fastapi.responses import FileResponse
 
 from .database import init_db
 from .services.cache_builder import build_cache
+from .services.tide_scraper import scrape_and_overlay
 from .routers import tides, locations
 from .config import STATIC_DIR
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
+_scrape_task: asyncio.Task | None = None
+
+
+async def _daily_scrape_loop():
+    """Background task that re-scrapes ADMIRALTY data every 24 hours."""
+    while True:
+        await asyncio.sleep(24 * 60 * 60)  # Wait 24 hours
+        try:
+            logger.info("Daily ADMIRALTY scrape starting...")
+            await asyncio.to_thread(scrape_and_overlay)
+            logger.info("Daily ADMIRALTY scrape complete")
+        except Exception:
+            logger.exception("Daily scrape failed — will retry in 24h")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _scrape_task
+
     logger.info("Starting Tide Times Calendar...")
     init_db()
     logger.info("Database initialized")
@@ -32,8 +50,25 @@ async def lifespan(app: FastAPI):
         logger.info("Cache build complete!")
     else:
         logger.info(f"Using existing cache ({count} predictions)")
+        # Still overlay fresh ADMIRALTY data on existing cache
+        try:
+            scrape_and_overlay()
+        except Exception:
+            logger.exception("Startup scrape failed — using existing predictions")
+
+    # Spawn daily background scrape task
+    _scrape_task = asyncio.create_task(_daily_scrape_loop())
+    logger.info("Daily ADMIRALTY scrape task scheduled")
 
     yield
+
+    # Clean shutdown
+    if _scrape_task:
+        _scrape_task.cancel()
+        try:
+            await _scrape_task
+        except asyncio.CancelledError:
+            pass
     logger.info("Shutting down Tide Times Calendar")
 
 
