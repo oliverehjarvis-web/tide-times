@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Query
 from zoneinfo import ZoneInfo
 
@@ -8,6 +8,13 @@ from ..config import TIMEZONE
 router = APIRouter(prefix="/api/tides", tags=["tides"])
 
 tz = ZoneInfo(TIMEZONE)
+
+
+def _utc_to_local(utc_str: str) -> str:
+    """Convert a UTC datetime string to Europe/London local time."""
+    dt = datetime.fromisoformat(utc_str).replace(tzinfo=ZoneInfo("UTC"))
+    local_dt = dt.astimezone(tz)
+    return local_dt.strftime("%Y-%m-%dT%H:%M:%S")
 
 
 @router.get("/{location}")
@@ -34,6 +41,7 @@ def get_tides(location: str, date: date = Query(default=None)):
         "tides": [
             {
                 "datetime_utc": row["datetime_utc"],
+                "datetime_local": _utc_to_local(row["datetime_utc"]),
                 "type": row["type"],
                 "height_metres": row["height_metres"],
             }
@@ -60,14 +68,16 @@ def get_tides_range(
             (location, start_str, end_str),
         ).fetchall()
 
-    # Group by date
+    # Group by local date
     days = {}
     for row in rows:
-        d = row["datetime_utc"][:10]
+        local_dt = _utc_to_local(row["datetime_utc"])
+        d = local_dt[:10]
         if d not in days:
             days[d] = []
         days[d].append({
             "datetime_utc": row["datetime_utc"],
+            "datetime_local": local_dt,
             "type": row["type"],
             "height_metres": row["height_metres"],
         })
@@ -102,7 +112,11 @@ def get_hourly(location: str, date: date = Query(default=None)):
         "location": location,
         "date": date_str,
         "levels": [
-            {"datetime_utc": row["datetime_utc"], "height_metres": row["height_metres"]}
+            {
+                "datetime_utc": row["datetime_utc"],
+                "datetime_local": _utc_to_local(row["datetime_utc"]),
+                "height_metres": row["height_metres"],
+            }
             for row in rows
         ],
     }

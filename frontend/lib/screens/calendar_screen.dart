@@ -213,7 +213,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         ? const Color(0xFF66BB6A)
         : const Color(0xFF42A5F5);
     final timeStr =
-        '${event.dateTimeUtc.hour.toString().padLeft(2, '0')}:${event.dateTimeUtc.minute.toString().padLeft(2, '0')}';
+        '${event.dateTimeLocal.hour.toString().padLeft(2, '0')}:${event.dateTimeLocal.minute.toString().padLeft(2, '0')}';
 
     return Padding(
       padding: const EdgeInsets.only(top: 1),

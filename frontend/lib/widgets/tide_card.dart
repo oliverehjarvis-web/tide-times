@@ -13,7 +13,7 @@ class TideCard extends StatelessWidget {
     final icon = isHigh ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded;
     final label = isHigh ? 'HIGH' : 'LOW';
     final timeStr =
-        '${event.dateTimeUtc.hour.toString().padLeft(2, '0')}:${event.dateTimeUtc.minute.toString().padLeft(2, '0')}';
+        '${event.dateTimeLocal.hour.toString().padLeft(2, '0')}:${event.dateTimeLocal.minute.toString().padLeft(2, '0')}';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

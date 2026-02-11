@@ -167,7 +167,7 @@ class _TideChartPainter extends CustomPainter {
 
     for (var i = 0; i < hourlyLevels.length; i++) {
       final level = hourlyLevels[i];
-      final hour = level.dateTimeUtc.hour + level.dateTimeUtc.minute / 60.0;
+      final hour = level.dateTimeLocal.hour + level.dateTimeLocal.minute / 60.0;
       final x = rect.left + (hour / 24) * rect.width;
       final y = rect.bottom - ((level.heightMetres - minH) / (maxH - minH)) * rect.height;
 
@@ -218,7 +218,7 @@ class _TideChartPainter extends CustomPainter {
 
   void _drawExtremeMarkers(Canvas canvas, Rect rect, double minH, double maxH) {
     for (final event in tideEvents) {
-      final hour = event.dateTimeUtc.hour + event.dateTimeUtc.minute / 60.0;
+      final hour = event.dateTimeLocal.hour + event.dateTimeLocal.minute / 60.0;
       final x = rect.left + (hour / 24) * rect.width;
       final y = rect.bottom -
           ((event.heightMetres - minH) / (maxH - minH)) * rect.height;
@@ -239,7 +239,7 @@ class _TideChartPainter extends CustomPainter {
 
       // Label
       final timeStr =
-          '${event.dateTimeUtc.hour.toString().padLeft(2, '0')}:${event.dateTimeUtc.minute.toString().padLeft(2, '0')}';
+          '${event.dateTimeLocal.hour.toString().padLeft(2, '0')}:${event.dateTimeLocal.minute.toString().padLeft(2, '0')}';
       final label = '${event.heightMetres.toStringAsFixed(1)}m';
       final labelOffset = event.isHigh ? -22.0 : 10.0;
 

@@ -1,10 +1,12 @@
 class TideEvent {
   final DateTime dateTimeUtc;
+  final DateTime dateTimeLocal;
   final String type; // "high" or "low"
   final double heightMetres;
 
   TideEvent({
     required this.dateTimeUtc,
+    required this.dateTimeLocal,
     required this.type,
     required this.heightMetres,
   });
@@ -12,6 +14,7 @@ class TideEvent {
   factory TideEvent.fromJson(Map<String, dynamic> json) {
     return TideEvent(
       dateTimeUtc: DateTime.parse(json['datetime_utc']),
+      dateTimeLocal: DateTime.parse(json['datetime_local'] ?? json['datetime_utc']),
       type: json['type'],
       heightMetres: (json['height_metres'] as num).toDouble(),
     );
@@ -23,13 +26,19 @@ class TideEvent {
 
 class HourlyLevel {
   final DateTime dateTimeUtc;
+  final DateTime dateTimeLocal;
   final double heightMetres;
 
-  HourlyLevel({required this.dateTimeUtc, required this.heightMetres});
+  HourlyLevel({
+    required this.dateTimeUtc,
+    required this.dateTimeLocal,
+    required this.heightMetres,
+  });
 
   factory HourlyLevel.fromJson(Map<String, dynamic> json) {
     return HourlyLevel(
       dateTimeUtc: DateTime.parse(json['datetime_utc']),
+      dateTimeLocal: DateTime.parse(json['datetime_local'] ?? json['datetime_utc']),
       heightMetres: (json['height_metres'] as num).toDouble(),
     );
   }

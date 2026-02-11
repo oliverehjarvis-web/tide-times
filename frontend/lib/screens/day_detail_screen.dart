@@ -217,7 +217,7 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
                   const SizedBox(height: 8),
                   ..._data!.hourlyLevels.map((level) {
                     final timeStr =
-                        '${level.dateTimeUtc.hour.toString().padLeft(2, '0')}:00';
+                        '${level.dateTimeLocal.hour.toString().padLeft(2, '0')}:00';
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
