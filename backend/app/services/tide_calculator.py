@@ -19,24 +19,29 @@ class TideCalculator:
         self._phases = {}
         self._mean_levels = {}
         self._offsets = {}
-        self._epoch = datetime(2026, 1, 1)
+        self._epochs = {}
 
         for loc_id, loc_data in self._data.items():
+            epoch_str = loc_data.get("epoch", "2025-01-01T00:00:00Z")
+            epoch = datetime.fromisoformat(epoch_str.replace("Z", ""))
+
             names = [c["name"] for c in loc_data["constituents"]]
             tide = Tides(names)
-            tide.set_initial_time(self._epoch)
+            tide.set_initial_time(epoch)
 
             self._tides[loc_id] = tide
             self._amplitudes[loc_id] = np.array([c["amplitude"] for c in loc_data["constituents"]])
             self._phases[loc_id] = np.array([c["phase"] for c in loc_data["constituents"]])
             self._mean_levels[loc_id] = loc_data["mean_level"]
             self._offsets[loc_id] = loc_data.get("offsets_from_newquay")
+            self._epochs[loc_id] = epoch
 
     def height_at(self, location: str, dt: datetime) -> float:
         """Calculate tide height at a specific time for a location."""
         # Use newquay constituents for subordinate stations
         base_loc = "newquay" if self._offsets.get(location) else location
-        t_sec = (dt - self._epoch).total_seconds()
+        epoch = self._epochs[base_loc]
+        t_sec = (dt - epoch).total_seconds()
 
         tide = self._tides[base_loc]
         height = self._mean_levels[base_loc] + tide.from_amplitude_phase(
@@ -72,6 +77,7 @@ class TideCalculator:
         height_offset_lw = offsets["height_lw_m"] if offsets else 0
 
         base_loc = "newquay" if offsets else location
+        epoch = self._epochs[base_loc]
 
         # Scan at 6-minute intervals over the day (with buffer)
         start = datetime(date.year, date.month, date.day) - timedelta(hours=1)
@@ -82,7 +88,7 @@ class TideCalculator:
         heights = []
         t = start
         while t <= end:
-            t_sec = (t - self._epoch).total_seconds()
+            t_sec = (t - epoch).total_seconds()
             h = self._mean_levels[base_loc] + self._tides[base_loc].from_amplitude_phase(
                 self._amplitudes[base_loc], self._phases[base_loc], t_sec
             )
@@ -95,7 +101,7 @@ class TideCalculator:
         for i in range(1, len(heights) - 1):
             if heights[i] > heights[i-1] and heights[i] > heights[i+1]:
                 # High tide - refine with parabolic interpolation
-                refined_t, refined_h = self._refine_extreme(times, heights, i)
+                refined_t, refined_h = self._refine_extreme(times, heights, i, epoch)
                 if datetime(date.year, date.month, date.day) <= refined_t < datetime(date.year, date.month, date.day) + timedelta(days=1):
                     extremes.append({
                         "datetime": refined_t + time_offset_hw,
@@ -104,7 +110,7 @@ class TideCalculator:
                     })
             elif heights[i] < heights[i-1] and heights[i] < heights[i+1]:
                 # Low tide
-                refined_t, refined_h = self._refine_extreme(times, heights, i)
+                refined_t, refined_h = self._refine_extreme(times, heights, i, epoch)
                 if datetime(date.year, date.month, date.day) <= refined_t < datetime(date.year, date.month, date.day) + timedelta(days=1):
                     extremes.append({
                         "datetime": refined_t + time_offset_lw,
@@ -115,11 +121,11 @@ class TideCalculator:
         extremes.sort(key=lambda e: e["datetime"])
         return extremes
 
-    def _refine_extreme(self, times, heights, idx):
+    def _refine_extreme(self, times, heights, idx, epoch):
         """Parabolic interpolation to refine extreme time and height."""
-        t0 = (times[idx-1] - self._epoch).total_seconds()
-        t1 = (times[idx] - self._epoch).total_seconds()
-        t2 = (times[idx+1] - self._epoch).total_seconds()
+        t0 = (times[idx-1] - epoch).total_seconds()
+        t1 = (times[idx] - epoch).total_seconds()
+        t2 = (times[idx+1] - epoch).total_seconds()
         h0, h1, h2 = heights[idx-1], heights[idx], heights[idx+1]
 
         # Parabolic interpolation
@@ -136,10 +142,7 @@ class TideCalculator:
         t_peak = -b / (2 * a)
         h_peak = h1 + a * (t_peak - t1) ** 2 + b * (t_peak - t1)
 
-        # Use the actual height calculation at the refined time for accuracy
-        refined_dt = self._epoch + timedelta(seconds=t_peak)
-        refined_h = self.height_at("newquay" if self._offsets.get(times[idx]) else "newquay", refined_dt)
-
+        refined_dt = epoch + timedelta(seconds=t_peak)
         return refined_dt, heights[idx]  # Use scanned height for stability
 
     def get_location_info(self, location: str) -> dict:
