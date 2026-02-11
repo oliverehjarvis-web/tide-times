@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+*.md
+frontend/build/
+frontend/.dart_tool/
+*.db
+plan.md

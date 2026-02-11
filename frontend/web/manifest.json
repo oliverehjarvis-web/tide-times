@@ -1,0 +1,11 @@
+{
+  "name": "Tide Times - Cornwall",
+  "short_name": "Tide Times",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0a1628",
+  "theme_color": "#1565c0",
+  "description": "Tide times and heights for Cornwall beaches",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false
+}

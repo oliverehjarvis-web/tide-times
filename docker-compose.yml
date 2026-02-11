@@ -1,0 +1,14 @@
+services:
+  tide-times:
+    build: .
+    container_name: tide-times
+    ports:
+      - "8080:8080"
+    volumes:
+      - tide-data:/app/backend/app/data
+    environment:
+      - TZ=Europe/London
+    restart: unless-stopped
+
+volumes:
+  tide-data:

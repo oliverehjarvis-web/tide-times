@@ -1,0 +1,224 @@
+{
+  "newquay": {
+    "station": "Newquay",
+    "port_id": "0546",
+    "latitude": 50.4167,
+    "longitude": -5.0833,
+    "datum": "Chart Datum (LAT)",
+    "mean_level": 3.8937037037037037,
+    "epoch": "2026-01-01T00:00:00Z",
+    "constituents": [
+      {
+        "name": "M2",
+        "amplitude": 2.070304560795634,
+        "phase": 2.783318072545903
+      },
+      {
+        "name": "S2",
+        "amplitude": 7.674681651224429,
+        "phase": 3.7273034485923353
+      },
+      {
+        "name": "N2",
+        "amplitude": 0.7344968837005171,
+        "phase": 4.372674753723203
+      },
+      {
+        "name": "K2",
+        "amplitude": 4.718749853854274,
+        "phase": 5.664903964446303
+      },
+      {
+        "name": "K1",
+        "amplitude": 0.27263915907862274,
+        "phase": 3.724979432693246
+      },
+      {
+        "name": "O1",
+        "amplitude": 0.017984157529876105,
+        "phase": 6.162086635637301
+      },
+      {
+        "name": "P1",
+        "amplitude": 0.31747244896769333,
+        "phase": 5.159371063707454
+      },
+      {
+        "name": "Q1",
+        "amplitude": 0.024038523563285372,
+        "phase": 2.6967944187578468
+      }
+    ]
+  },
+  "holywell": {
+    "station": "Holywell Bay",
+    "port_id": "N/A",
+    "latitude": 50.393,
+    "longitude": -5.148,
+    "datum": "Chart Datum (LAT)",
+    "mean_level": 3.8937037037037037,
+    "epoch": "2026-01-01T00:00:00Z",
+    "constituents": [
+      {
+        "name": "M2",
+        "amplitude": 2.070304560795634,
+        "phase": 2.783318072545903
+      },
+      {
+        "name": "S2",
+        "amplitude": 7.674681651224429,
+        "phase": 3.7273034485923353
+      },
+      {
+        "name": "N2",
+        "amplitude": 0.7344968837005171,
+        "phase": 4.372674753723203
+      },
+      {
+        "name": "K2",
+        "amplitude": 4.718749853854274,
+        "phase": 5.664903964446303
+      },
+      {
+        "name": "K1",
+        "amplitude": 0.27263915907862274,
+        "phase": 3.724979432693246
+      },
+      {
+        "name": "O1",
+        "amplitude": 0.017984157529876105,
+        "phase": 6.162086635637301
+      },
+      {
+        "name": "P1",
+        "amplitude": 0.31747244896769333,
+        "phase": 5.159371063707454
+      },
+      {
+        "name": "Q1",
+        "amplitude": 0.024038523563285372,
+        "phase": 2.6967944187578468
+      }
+    ],
+    "offsets_from_newquay": {
+      "time_hw_min": 0,
+      "time_lw_min": 0,
+      "height_hw_m": 0.0,
+      "height_lw_m": 0.0
+    }
+  },
+  "polzeath": {
+    "station": "Polzeath",
+    "port_id": "N/A",
+    "latitude": 50.572,
+    "longitude": -4.919,
+    "datum": "Chart Datum (LAT)",
+    "mean_level": 3.8937037037037037,
+    "epoch": "2026-01-01T00:00:00Z",
+    "constituents": [
+      {
+        "name": "M2",
+        "amplitude": 2.070304560795634,
+        "phase": 2.783318072545903
+      },
+      {
+        "name": "S2",
+        "amplitude": 7.674681651224429,
+        "phase": 3.7273034485923353
+      },
+      {
+        "name": "N2",
+        "amplitude": 0.7344968837005171,
+        "phase": 4.372674753723203
+      },
+      {
+        "name": "K2",
+        "amplitude": 4.718749853854274,
+        "phase": 5.664903964446303
+      },
+      {
+        "name": "K1",
+        "amplitude": 0.27263915907862274,
+        "phase": 3.724979432693246
+      },
+      {
+        "name": "O1",
+        "amplitude": 0.017984157529876105,
+        "phase": 6.162086635637301
+      },
+      {
+        "name": "P1",
+        "amplitude": 0.31747244896769333,
+        "phase": 5.159371063707454
+      },
+      {
+        "name": "Q1",
+        "amplitude": 0.024038523563285372,
+        "phase": 2.6967944187578468
+      }
+    ],
+    "offsets_from_newquay": {
+      "time_hw_min": 5,
+      "time_lw_min": 5,
+      "height_hw_m": 0.0,
+      "height_lw_m": 0.0
+    }
+  },
+  "port_isaac": {
+    "station": "Port Isaac",
+    "port_id": "N/A",
+    "latitude": 50.593,
+    "longitude": -4.829,
+    "datum": "Chart Datum (LAT)",
+    "mean_level": 3.8937037037037037,
+    "epoch": "2026-01-01T00:00:00Z",
+    "constituents": [
+      {
+        "name": "M2",
+        "amplitude": 2.070304560795634,
+        "phase": 2.783318072545903
+      },
+      {
+        "name": "S2",
+        "amplitude": 7.674681651224429,
+        "phase": 3.7273034485923353
+      },
+      {
+        "name": "N2",
+        "amplitude": 0.7344968837005171,
+        "phase": 4.372674753723203
+      },
+      {
+        "name": "K2",
+        "amplitude": 4.718749853854274,
+        "phase": 5.664903964446303
+      },
+      {
+        "name": "K1",
+        "amplitude": 0.27263915907862274,
+        "phase": 3.724979432693246
+      },
+      {
+        "name": "O1",
+        "amplitude": 0.017984157529876105,
+        "phase": 6.162086635637301
+      },
+      {
+        "name": "P1",
+        "amplitude": 0.31747244896769333,
+        "phase": 5.159371063707454
+      },
+      {
+        "name": "Q1",
+        "amplitude": 0.024038523563285372,
+        "phase": 2.6967944187578468
+      }
+    ],
+    "offsets_from_newquay": {
+      "time_hw_min": 6,
+      "time_lw_min": 0,
+      "height_hw_m": 0.5,
+      "height_lw_m": 0.1
+    }
+  }
+}
