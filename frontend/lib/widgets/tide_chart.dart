@@ -178,7 +178,7 @@ class _TideChartPainter extends CustomPainter {
       } else {
         // Smooth curve using cubic bezier
         final prevLevel = hourlyLevels[i - 1];
-        final prevHour = prevLevel.dateTimeUtc.hour + prevLevel.dateTimeUtc.minute / 60.0;
+        final prevHour = prevLevel.dateTimeLocal.hour + prevLevel.dateTimeLocal.minute / 60.0;
         final prevX = rect.left + (prevHour / 24) * rect.width;
         final prevY = rect.bottom -
             ((prevLevel.heightMetres - minH) / (maxH - minH)) * rect.height;
@@ -190,8 +190,8 @@ class _TideChartPainter extends CustomPainter {
     }
 
     // Close fill path
-    final lastHour = hourlyLevels.last.dateTimeUtc.hour +
-        hourlyLevels.last.dateTimeUtc.minute / 60.0;
+    final lastHour = hourlyLevels.last.dateTimeLocal.hour +
+        hourlyLevels.last.dateTimeLocal.minute / 60.0;
     fillPath.lineTo(rect.left + (lastHour / 24) * rect.width, rect.bottom);
     fillPath.close();
 

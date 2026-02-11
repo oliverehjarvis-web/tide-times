@@ -26,6 +26,7 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
   DayTideData? _data;
   bool _loading = true;
   late DateTime _currentDate;
+  bool _hourlyExpanded = false;
 
   @override
   void initState() {
@@ -48,16 +49,10 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
     }
   }
 
-  void _previousDay() {
+  void _changeDay(int delta) {
     setState(() {
-      _currentDate = _currentDate.subtract(const Duration(days: 1));
-    });
-    _loadData();
-  }
-
-  void _nextDay() {
-    setState(() {
-      _currentDate = _currentDate.add(const Duration(days: 1));
+      _currentDate = _currentDate.add(Duration(days: delta));
+      _hourlyExpanded = false;
     });
     _loadData();
   }
@@ -65,146 +60,163 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
-    final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    final days = [
+      'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+      'Sunday'
+    ];
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.locationName),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
       ),
-      body: Column(
-        children: [
-          // Date navigator
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  onPressed: _previousDay,
-                  icon: const Icon(Icons.chevron_left_rounded, color: Colors.white70),
-                ),
-                Column(
-                  children: [
-                    Text(
-                      '${days[_currentDate.weekday - 1]}',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        fontSize: 13,
-                      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Date navigator
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => _changeDay(-1),
+                    icon: const Icon(Icons.chevron_left_rounded,
+                        color: Colors.white70, size: 28),
+                  ),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Text(
+                          days[_currentDate.weekday - 1],
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.5),
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${_currentDate.day} ${months[_currentDate.month - 1]} ${_currentDate.year}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      '${_currentDate.day} ${months[_currentDate.month - 1]} ${_currentDate.year}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                IconButton(
-                  onPressed: _nextDay,
-                  icon: const Icon(Icons.chevron_right_rounded, color: Colors.white70),
-                ),
-              ],
+                  ),
+                  IconButton(
+                    onPressed: () => _changeDay(1),
+                    icon: const Icon(Icons.chevron_right_rounded,
+                        color: Colors.white70, size: 28),
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          // Content
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _data == null
-                    ? const Center(
-                        child: Text('No data available',
-                            style: TextStyle(color: Colors.white54)))
-                    : _buildContent(),
-          ),
-        ],
+            // Swipeable content
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _data == null
+                      ? const Center(
+                          child: Text('No data available',
+                              style: TextStyle(color: Colors.white54)))
+                      : GestureDetector(
+                          onHorizontalDragEnd: (details) {
+                            if (details.primaryVelocity != null) {
+                              if (details.primaryVelocity! < -200) {
+                                _changeDay(1);
+                              } else if (details.primaryVelocity! > 200) {
+                                _changeDay(-1);
+                              }
+                            }
+                          },
+                          child: _buildContent(),
+                        ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildContent() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Full tide chart
+          // Tide chart
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Tide Height',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      'Tide Height',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                   TideChart(
                     hourlyLevels: _data!.hourlyLevels,
                     tideEvents: _data!.tides,
                     sunTimes: _data!.sunTimes,
-                    height: 260,
+                    height: 220,
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           // Tide events
-          Text(
-            'Tides',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.6),
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          _buildSectionLabel('Tides'),
           const SizedBox(height: 8),
           ..._data!.tides.map((event) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: TideCard(event: event),
               )),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
           // Sun times
           if (_data!.sunTimes != null) ...[
-            Text(
-              'Daylight',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            _buildSectionLabel('Daylight'),
             const SizedBox(height: 8),
             SunTimesBar(sunTimes: _data!.sunTimes!),
+            const SizedBox(height: 12),
           ],
 
-          const SizedBox(height: 16),
+          // Collapsible hourly levels
+          if (_data!.hourlyLevels.isNotEmpty) _buildHourlySection(),
+        ],
+      ),
+    );
+  }
 
-          // Hourly levels table
-          Card(
+  Widget _buildHourlySection() {
+    return Card(
+      child: Column(
+        children: [
+          // Header / toggle
+          InkWell(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            onTap: () => setState(() => _hourlyExpanded = !_hourlyExpanded),
             child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     'Hourly Water Levels',
@@ -214,86 +226,108 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  ..._data!.hourlyLevels.map((level) {
-                    final timeStr =
-                        '${level.dateTimeLocal.hour.toString().padLeft(2, '0')}:00';
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 50,
-                            child: Text(
-                              timeStr,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.5),
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: _buildLevelBar(level.heightMetres),
-                          ),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 50,
-                            child: Text(
-                              '${level.heightMetres.toStringAsFixed(1)}m',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              textAlign: TextAlign.right,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
+                  Icon(
+                    _hourlyExpanded
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    color: Colors.white38,
+                    size: 22,
+                  ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          // Expandable content
+          AnimatedCrossFade(
+            firstChild: const SizedBox(width: double.infinity),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Column(
+                children: _data!.hourlyLevels.map((level) {
+                  final timeStr =
+                      '${level.dateTimeLocal.hour.toString().padLeft(2, '0')}:00';
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 44,
+                          child: Text(
+                            timeStr,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.5),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: _buildLevelBar(level.heightMetres),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 42,
+                          child: Text(
+                            '${level.heightMetres.toStringAsFixed(1)}m',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            crossFadeState: _hourlyExpanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 250),
+          ),
         ],
       ),
     );
   }
 
+  Widget _buildSectionLabel(String text) {
+    return Text(
+      text,
+      style: TextStyle(
+        color: Colors.white.withValues(alpha: 0.5),
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.3,
+      ),
+    );
+  }
+
   Widget _buildLevelBar(double height) {
-    // Normalize to 0-8m range
     final fraction = (height / 8.0).clamp(0.0, 1.0);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Stack(
-          children: [
-            Container(
-              height: 8,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(4),
+    return Stack(
+      children: [
+        Container(
+          height: 6,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+        FractionallySizedBox(
+          widthFactor: fraction,
+          child: Container(
+            height: 6,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1565C0), Color(0xFF42A5F5)],
               ),
+              borderRadius: BorderRadius.circular(3),
             ),
-            FractionallySizedBox(
-              widthFactor: fraction,
-              child: Container(
-                height: 8,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFF1565C0),
-                      const Color(0xFF42A5F5),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+          ),
+        ),
+      ],
     );
   }
 }

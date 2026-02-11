@@ -46,16 +46,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
   }
 
-  void _previousMonth() {
+  void _changeMonth(int delta) {
     setState(() {
-      _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1);
-    });
-    _loadMonth();
-  }
-
-  void _nextMonth() {
-    setState(() {
-      _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1);
+      _currentMonth =
+          DateTime(_currentMonth.year, _currentMonth.month + delta);
     });
     _loadMonth();
   }
@@ -70,86 +64,116 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.locationName),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
       ),
-      body: Column(
-        children: [
-          // Month navigator
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  onPressed: _previousMonth,
-                  icon: const Icon(Icons.chevron_left_rounded, color: Colors.white70),
-                ),
-                Text(
-                  '${months[_currentMonth.month - 1]} ${_currentMonth.year}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Month navigator
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    onPressed: () => _changeMonth(-1),
+                    icon: const Icon(Icons.chevron_left_rounded,
+                        color: Colors.white70, size: 28),
                   ),
-                ),
-                IconButton(
-                  onPressed: _nextMonth,
-                  icon: const Icon(Icons.chevron_right_rounded, color: Colors.white70),
-                ),
-              ],
+                  GestureDetector(
+                    onTap: () {
+                      // Jump to current month
+                      setState(() {
+                        _currentMonth = DateTime(
+                            DateTime.now().year, DateTime.now().month);
+                      });
+                      _loadMonth();
+                    },
+                    child: Text(
+                      '${months[_currentMonth.month - 1]} ${_currentMonth.year}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => _changeMonth(1),
+                    icon: const Icon(Icons.chevron_right_rounded,
+                        color: Colors.white70, size: 28),
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          // Day of week headers
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
-              children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-                  .map((d) => Expanded(
-                        child: Center(
-                          child: Text(
-                            d,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.4),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
+            // Day of week headers
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                children: ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+                    .map((d) => Expanded(
+                          child: Center(
+                            child: Text(
+                              d,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.35),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
-                        ),
-                      ))
-                  .toList(),
+                        ))
+                    .toList(),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
+            const SizedBox(height: 4),
 
-          // Calendar grid
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _buildCalendarGrid(),
-          ),
-        ],
+            // Calendar grid with swipe
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : GestureDetector(
+                      onHorizontalDragEnd: (details) {
+                        if (details.primaryVelocity != null) {
+                          if (details.primaryVelocity! < -200) {
+                            _changeMonth(1);
+                          } else if (details.primaryVelocity! > 200) {
+                            _changeMonth(-1);
+                          }
+                        }
+                      },
+                      child: _buildCalendarGrid(),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildCalendarGrid() {
-    final daysInMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 0).day;
-    final firstWeekday = DateTime(_currentMonth.year, _currentMonth.month, 1).weekday;
+    final daysInMonth =
+        DateTime(_currentMonth.year, _currentMonth.month + 1, 0).day;
+    final firstWeekday =
+        DateTime(_currentMonth.year, _currentMonth.month, 1).weekday;
     final today = DateTime.now();
+    final totalCells = daysInMonth + firstWeekday - 1;
+    // Round up to full weeks
+    final rows = ((totalCells) / 7).ceil();
+    final cellCount = rows * 7;
 
     return GridView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 7,
-        childAspectRatio: 0.55,
+        childAspectRatio: 0.48,
+        crossAxisSpacing: 3,
+        mainAxisSpacing: 3,
       ),
-      itemCount: daysInMonth + firstWeekday - 1,
+      itemCount: cellCount,
       itemBuilder: (context, index) {
-        if (index < firstWeekday - 1) {
+        if (index < firstWeekday - 1 || index >= daysInMonth + firstWeekday - 1) {
           return const SizedBox();
         }
 
@@ -161,46 +185,55 @@ class _CalendarScreenState extends State<CalendarScreen> {
         final isToday = date.year == today.year &&
             date.month == today.month &&
             date.day == today.day;
+        final isPast = date.isBefore(DateTime(today.year, today.month, today.day));
 
-        return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => DayDetailScreen(
-                  locationId: widget.locationId,
-                  locationName: widget.locationName,
-                  date: date,
-                ),
-              ),
-            );
-          },
-          child: Container(
-            margin: const EdgeInsets.all(2),
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: isToday
-                  ? const Color(0xFF1565C0).withValues(alpha: 0.3)
-                  : const Color(0xFF132040),
-              borderRadius: BorderRadius.circular(8),
-              border: isToday
-                  ? Border.all(color: const Color(0xFF42A5F5), width: 1.5)
-                  : null,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  '$day',
-                  style: TextStyle(
-                    color: isToday ? const Color(0xFF42A5F5) : Colors.white70,
-                    fontSize: 13,
-                    fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => DayDetailScreen(
+                    locationId: widget.locationId,
+                    locationName: widget.locationName,
+                    date: date,
                   ),
                 ),
-                const SizedBox(height: 2),
-                ...tides.take(4).map((t) => _buildTideMini(t)),
-              ],
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+              decoration: BoxDecoration(
+                color: isToday
+                    ? const Color(0xFF1565C0).withValues(alpha: 0.25)
+                    : const Color(0xFF132040).withValues(alpha: isPast ? 0.5 : 1.0),
+                borderRadius: BorderRadius.circular(8),
+                border: isToday
+                    ? Border.all(color: const Color(0xFF42A5F5), width: 1.5)
+                    : null,
+              ),
+              child: Column(
+                children: [
+                  // Day number
+                  Text(
+                    '$day',
+                    style: TextStyle(
+                      color: isToday
+                          ? const Color(0xFF42A5F5)
+                          : isPast
+                              ? Colors.white38
+                              : Colors.white70,
+                      fontSize: 13,
+                      fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  // Tide events
+                  ...tides.take(4).map((t) => _buildTideMini(t, isPast)),
+                ],
+              ),
             ),
           ),
         );
@@ -208,33 +241,36 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
-  Widget _buildTideMini(TideEvent event) {
+  Widget _buildTideMini(TideEvent event, bool isPast) {
     final color = event.isHigh
         ? const Color(0xFF66BB6A)
         : const Color(0xFF42A5F5);
     final timeStr =
         '${event.dateTimeLocal.hour.toString().padLeft(2, '0')}:${event.dateTimeLocal.minute.toString().padLeft(2, '0')}';
+    final heightStr = event.heightMetres.toStringAsFixed(1);
 
     return Padding(
-      padding: const EdgeInsets.only(top: 1),
+      padding: const EdgeInsets.only(top: 2),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 4,
-            height: 4,
+            width: 5,
+            height: 5,
             decoration: BoxDecoration(
-              color: color,
+              color: isPast ? color.withValues(alpha: 0.3) : color,
               shape: BoxShape.circle,
             ),
           ),
-          const SizedBox(width: 3),
-          Flexible(
+          const SizedBox(width: 2),
+          Expanded(
             child: Text(
-              timeStr,
+              '$timeStr $heightStr',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 9,
+                color: isPast
+                    ? Colors.white.withValues(alpha: 0.3)
+                    : Colors.white.withValues(alpha: 0.6),
+                fontSize: 8,
+                fontWeight: FontWeight.w500,
               ),
               overflow: TextOverflow.ellipsis,
             ),
