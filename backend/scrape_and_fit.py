@@ -310,7 +310,7 @@ def main():
                 "offsets_from_newquay": sub_info["offsets"],
             }
 
-        output_path = "app/data/harmonics.json"
+        output_path = "app/harmonics.json"
         with open(output_path, "w") as f:
             json.dump(locations, f, indent=2)
         print(f"\n  Saved to {output_path}")

@@ -35,8 +35,8 @@ COPY --from=flutter-build /app/frontend/build/web /app/frontend/build/web
 RUN mkdir -p /app/backend/app/data && \
     chown -R 1000:1000 /app/backend/app/data
 
-# Copy harmonic data
-COPY backend/app/data/harmonics.json /app/backend/app/data/harmonics.json
+# Copy harmonic data outside volume-mounted data/ directory
+COPY backend/app/harmonics.json /app/backend/app/harmonics.json
 
 ENV PYTHONPATH=/app
 ENV TZ=Europe/London
