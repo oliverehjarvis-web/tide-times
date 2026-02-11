@@ -3,7 +3,7 @@ services:
     build: .
     container_name: tide-times
     ports:
-      - "8080:8080"
+      - "7777:8080"
     volumes:
       - tide-data:/app/backend/app/data
     environment:
