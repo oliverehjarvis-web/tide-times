@@ -8,6 +8,7 @@ services:
       - tide-data:/app/backend/app/data
     environment:
       - TZ=Europe/London
+      - REBUILD_CACHE=1
     restart: unless-stopped
 
 volumes:
