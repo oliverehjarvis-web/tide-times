@@ -1,6 +1,6 @@
 services:
   tide-times:
-    build: .
+    image: ghcr.io/oliverehjarvis-web/tide-times:latest
     container_name: tide-times
     ports:
       - "7777:8080"
