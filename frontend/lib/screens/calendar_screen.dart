@@ -120,44 +120,56 @@ class _CalendarScreenState extends State<CalendarScreen>
               ),
             ),
 
-            // Day of week headers
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                children: ['M', 'T', 'W', 'T', 'F', 'S', 'S']
-                    .map((d) => Expanded(
-                          child: Center(
-                            child: Text(
-                              d,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.35),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ))
-                    .toList(),
-              ),
-            ),
-            const SizedBox(height: 4),
-
-            // Calendar grid with swipe
+            // Day of week headers + grid, centered with max width
             Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : GestureDetector(
-                      onHorizontalDragEnd: (details) {
-                        if (details.primaryVelocity != null) {
-                          if (details.primaryVelocity! < -200) {
-                            _changeMonth(1);
-                          } else if (details.primaryVelocity! > 200) {
-                            _changeMonth(-1);
-                          }
-                        }
-                      },
-                      child: _buildCalendarGrid(),
-                    ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 500),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Row(
+                          children: ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+                              .map((d) => Expanded(
+                                    child: Center(
+                                      child: Text(
+                                        d,
+                                        style: TextStyle(
+                                          color: Colors.white
+                                              .withValues(alpha: 0.35),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ))
+                              .toList(),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Expanded(
+                        child: _loading
+                            ? const Center(
+                                child: CircularProgressIndicator())
+                            : GestureDetector(
+                                onHorizontalDragEnd: (details) {
+                                  if (details.primaryVelocity != null) {
+                                    if (details.primaryVelocity! < -200) {
+                                      _changeMonth(1);
+                                    } else if (details.primaryVelocity! >
+                                        200) {
+                                      _changeMonth(-1);
+                                    }
+                                  }
+                                },
+                                child: _buildCalendarGrid(),
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -175,12 +187,11 @@ class _CalendarScreenState extends State<CalendarScreen>
     final rows = ((totalCells) / 7).ceil();
     final cellCount = rows * 7;
 
-    // Responsive aspect ratio based on screen height
-    final screenHeight = MediaQuery.of(context).size.height;
-    final availableHeight = screenHeight - 200; // approx space for header/nav
-    final cellHeight = availableHeight / rows;
-    final cellWidth = (MediaQuery.of(context).size.width - 8) / 7;
-    final aspectRatio = (cellWidth / cellHeight).clamp(0.35, 0.7);
+    return LayoutBuilder(builder: (context, constraints) {
+    // Use actual available dimensions from the constrained layout
+    final cellWidth = (constraints.maxWidth - 8) / 7;
+    final cellHeight = (constraints.maxHeight - 6 * 3) / rows; // subtract spacing
+    final aspectRatio = (cellWidth / cellHeight).clamp(0.35, 0.85);
 
     return AnimatedBuilder(
       animation: _gridAnimController,
@@ -293,6 +304,7 @@ class _CalendarScreenState extends State<CalendarScreen>
         );
       },
     );
+    });
   }
 
   Widget _buildTideMini(TideEvent event, bool isPast) {
