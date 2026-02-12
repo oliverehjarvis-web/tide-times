@@ -102,22 +102,11 @@ class _TideChartPainter extends CustomPainter {
     this.drawProgress = 1.0,
   });
 
-  /// Get the UTC hour offset from midnight UTC of the first data point's date.
-  /// This ensures monotonic x-positions even across DST boundaries.
-  double _utcHour(DateTime utcTime) {
-    return utcTime.hour + utcTime.minute / 60.0;
-  }
-
-  /// For tide events, calculate UTC hour relative to the hourly data's
-  /// start date to handle events that span midnight correctly.
-  double _eventUtcHour(TideEvent event) {
-    if (hourlyLevels.isEmpty) return _utcHour(event.dateTimeUtc);
-    final baseDate = DateTime.utc(
-      hourlyLevels.first.dateTimeUtc.year,
-      hourlyLevels.first.dateTimeUtc.month,
-      hourlyLevels.first.dateTimeUtc.day,
-    );
-    return event.dateTimeUtc.difference(baseDate).inMinutes / 60.0;
+  /// Extract the hour value from a dateTimeUtc field.
+  /// The backend sends UTC times as timezone-naive ISO strings, so
+  /// .hour/.minute give us the actual UTC hour regardless of device timezone.
+  double _utcHourOf(DateTime dt) {
+    return dt.hour + dt.minute / 60.0;
   }
 
   @override
@@ -274,8 +263,8 @@ class _TideChartPainter extends CustomPainter {
         ((hourlyLevels.length - 1) * drawProgress).round();
 
     for (var i = 0; i <= maxIndex && i < hourlyLevels.length; i++) {
-      // Use index-based positioning: 25 points map to hours 0-24
-      final hour = i * 24.0 / (hourlyLevels.length - 1);
+      // Use the actual UTC hour for x-positioning
+      final hour = _utcHourOf(hourlyLevels[i].dateTimeUtc);
       final x = rect.left + (hour / 24) * rect.width;
       final y = rect.bottom -
           ((hourlyLevels[i].heightMetres - minH) / (maxH - minH)) *
@@ -286,7 +275,7 @@ class _TideChartPainter extends CustomPainter {
         fillPath.moveTo(x, rect.bottom);
         fillPath.lineTo(x, y);
       } else {
-        final prevHour = (i - 1) * 24.0 / (hourlyLevels.length - 1);
+        final prevHour = _utcHourOf(hourlyLevels[i - 1].dateTimeUtc);
         final prevX = rect.left + (prevHour / 24) * rect.width;
         final prevY = rect.bottom -
             ((hourlyLevels[i - 1].heightMetres - minH) / (maxH - minH)) *
@@ -298,9 +287,9 @@ class _TideChartPainter extends CustomPainter {
       }
     }
 
-    // Close fill path at current draw position
-    if (maxIndex < hourlyLevels.length) {
-      final lastHour = maxIndex * 24.0 / (hourlyLevels.length - 1);
+    // Close fill path
+    if (maxIndex < hourlyLevels.length && maxIndex >= 0) {
+      final lastHour = _utcHourOf(hourlyLevels[maxIndex].dateTimeUtc);
       fillPath.lineTo(
           rect.left + (lastHour / 24) * rect.width, rect.bottom);
     }
@@ -330,9 +319,9 @@ class _TideChartPainter extends CustomPainter {
   void _drawExtremeMarkers(Canvas canvas, Rect rect, double minH,
       double maxH, double alpha) {
     for (final event in tideEvents) {
-      // Use UTC hour for positioning to avoid DST wrapping
-      final hour = _eventUtcHour(event);
-      if (hour < 0 || hour > 24) continue; // skip out-of-range events
+      // Use UTC hour for positioning - same coordinate system as the curve
+      final hour = _utcHourOf(event.dateTimeUtc);
+      if (hour < 0 || hour > 24) continue;
       final x = rect.left + (hour / 24) * rect.width;
       final y = rect.bottom -
           ((event.heightMetres - minH) / (maxH - minH)) * rect.height;
@@ -432,15 +421,28 @@ class _TideChartPainter extends CustomPainter {
 
     // Clamp touch to chart area
     final clampedX = touchX!.clamp(rect.left, rect.right);
-    final fraction = (clampedX - rect.left) / rect.width;
+    final touchHour = ((clampedX - rect.left) / rect.width) * 24;
 
-    // Map fraction to data index (0 to length-1)
-    final exactIndex = fraction * (hourlyLevels.length - 1);
-    final i0 = exactIndex.floor().clamp(0, hourlyLevels.length - 2);
-    final i1 = i0 + 1;
-    final t = exactIndex - i0;
+    // Find the two hourly data points that bracket this touch position
+    int i0 = 0;
+    for (var i = 0; i < hourlyLevels.length - 1; i++) {
+      final h = _utcHourOf(hourlyLevels[i].dateTimeUtc);
+      final hNext = _utcHourOf(hourlyLevels[i + 1].dateTimeUtc);
+      if (touchHour >= h && touchHour <= hNext) {
+        i0 = i;
+        break;
+      }
+      // If past last bracket, use last pair
+      if (i == hourlyLevels.length - 2) i0 = i;
+    }
+    final i1 = (i0 + 1).clamp(0, hourlyLevels.length - 1);
 
-    // Interpolate height between the two bracketing data points
+    final h0 = _utcHourOf(hourlyLevels[i0].dateTimeUtc);
+    final h1 = _utcHourOf(hourlyLevels[i1].dateTimeUtc);
+    final span = h1 - h0;
+    final t = span > 0 ? ((touchHour - h0) / span).clamp(0.0, 1.0) : 0.0;
+
+    // Interpolate height
     final interpHeight = hourlyLevels[i0].heightMetres +
         t * (hourlyLevels[i1].heightMetres - hourlyLevels[i0].heightMetres);
 
@@ -501,7 +503,6 @@ class _TideChartPainter extends CustomPainter {
 
     final bubbleWidth = tp.width + 16;
     final bubbleHeight = tp.height + 10;
-    // Position tooltip above the point, keep within bounds
     var bubbleX = clampedX - bubbleWidth / 2;
     bubbleX = bubbleX.clamp(rect.left, rect.right - bubbleWidth);
     var bubbleY = y - bubbleHeight - 12;
