@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../models/tide_data.dart';
 
-class TideChart extends StatelessWidget {
+class TideChart extends StatefulWidget {
   final List<HourlyLevel> hourlyLevels;
   final List<TideEvent> tideEvents;
   final SunTimes? sunTimes;
@@ -17,15 +17,70 @@ class TideChart extends StatelessWidget {
   });
 
   @override
+  State<TideChart> createState() => _TideChartState();
+}
+
+class _TideChartState extends State<TideChart>
+    with SingleTickerProviderStateMixin {
+  double? _touchX;
+  late AnimationController _animController;
+  late Animation<double> _drawAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _drawAnimation = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+    );
+    _animController.forward();
+  }
+
+  @override
+  void didUpdateWidget(TideChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.hourlyLevels != widget.hourlyLevels) {
+      _animController.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: height,
-      child: CustomPaint(
-        size: Size.infinite,
-        painter: _TideChartPainter(
-          hourlyLevels: hourlyLevels,
-          tideEvents: tideEvents,
-          sunTimes: sunTimes,
+      height: widget.height,
+      child: GestureDetector(
+        onPanStart: (d) => setState(() => _touchX = d.localPosition.dx),
+        onPanUpdate: (d) => setState(() => _touchX = d.localPosition.dx),
+        onPanEnd: (_) => setState(() => _touchX = null),
+        onTapDown: (d) => setState(() => _touchX = d.localPosition.dx),
+        onTapUp: (_) =>
+            Future.delayed(const Duration(seconds: 2), () {
+              if (mounted) setState(() => _touchX = null);
+            }),
+        child: AnimatedBuilder(
+          animation: _drawAnimation,
+          builder: (context, _) {
+            return CustomPaint(
+              size: Size.infinite,
+              painter: _TideChartPainter(
+                hourlyLevels: widget.hourlyLevels,
+                tideEvents: widget.tideEvents,
+                sunTimes: widget.sunTimes,
+                touchX: _touchX,
+                drawProgress: _drawAnimation.value,
+              ),
+            );
+          },
         ),
       ),
     );
@@ -36,18 +91,23 @@ class _TideChartPainter extends CustomPainter {
   final List<HourlyLevel> hourlyLevels;
   final List<TideEvent> tideEvents;
   final SunTimes? sunTimes;
+  final double? touchX;
+  final double drawProgress;
 
   _TideChartPainter({
     required this.hourlyLevels,
     required this.tideEvents,
     this.sunTimes,
+    this.touchX,
+    this.drawProgress = 1.0,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (hourlyLevels.isEmpty) return;
 
-    final padding = const EdgeInsets.only(left: 40, right: 16, top: 16, bottom: 28);
+    final padding =
+        const EdgeInsets.only(left: 40, right: 16, top: 16, bottom: 28);
     final chartRect = Rect.fromLTWH(
       padding.left,
       padding.top,
@@ -72,20 +132,30 @@ class _TideChartPainter extends CustomPainter {
     _drawTideCurve(canvas, chartRect, minH, maxH);
 
     // Draw high/low markers
-    _drawExtremeMarkers(canvas, chartRect, minH, maxH);
+    if (drawProgress > 0.5) {
+      final markerAlpha = ((drawProgress - 0.5) * 2).clamp(0.0, 1.0);
+      _drawExtremeMarkers(canvas, chartRect, minH, maxH, markerAlpha);
+    }
 
     // Draw time axis
     _drawTimeAxis(canvas, chartRect);
 
     // Draw current time indicator
     _drawCurrentTime(canvas, chartRect);
+
+    // Draw touch tooltip
+    if (touchX != null) {
+      _drawTooltip(canvas, size, chartRect, minH, maxH);
+    }
   }
 
   void _drawSunBackground(Canvas canvas, Rect rect, SunTimes sun) {
     final sunriseParts = sun.sunrise.split(':');
     final sunsetParts = sun.sunset.split(':');
-    final sunriseHour = int.parse(sunriseParts[0]) + int.parse(sunriseParts[1]) / 60;
-    final sunsetHour = int.parse(sunsetParts[0]) + int.parse(sunsetParts[1]) / 60;
+    final sunriseHour =
+        int.parse(sunriseParts[0]) + int.parse(sunriseParts[1]) / 60;
+    final sunsetHour =
+        int.parse(sunsetParts[0]) + int.parse(sunsetParts[1]) / 60;
 
     final sunriseX = rect.left + (sunriseHour / 24) * rect.width;
     final sunsetX = rect.left + (sunsetHour / 24) * rect.width;
@@ -103,7 +173,8 @@ class _TideChartPainter extends CustomPainter {
           const Color(0xFF1a2a4a),
           const Color(0xFF0f1d35),
         ],
-      ).createShader(Rect.fromLTRB(sunriseX, rect.top, sunsetX, rect.bottom));
+      ).createShader(
+          Rect.fromLTRB(sunriseX, rect.top, sunsetX, rect.bottom));
     canvas.drawRect(
       Rect.fromLTRB(sunriseX, rect.top, sunsetX, rect.bottom),
       dayPaint,
@@ -112,8 +183,13 @@ class _TideChartPainter extends CustomPainter {
     // Dawn/dusk gradients
     final dawnPaint = Paint()
       ..shader = LinearGradient(
-        colors: [const Color(0x00FF8F00), const Color(0x33FF8F00), const Color(0x00FF8F00)],
-      ).createShader(Rect.fromLTRB(sunriseX - 20, rect.top, sunriseX + 20, rect.bottom));
+        colors: [
+          const Color(0x00FF8F00),
+          const Color(0x33FF8F00),
+          const Color(0x00FF8F00)
+        ],
+      ).createShader(Rect.fromLTRB(
+          sunriseX - 20, rect.top, sunriseX + 20, rect.bottom));
     canvas.drawRect(
       Rect.fromLTRB(sunriseX - 20, rect.top, sunriseX + 20, rect.bottom),
       dawnPaint,
@@ -121,8 +197,13 @@ class _TideChartPainter extends CustomPainter {
 
     final duskPaint = Paint()
       ..shader = LinearGradient(
-        colors: [const Color(0x00FF6D00), const Color(0x33FF6D00), const Color(0x00FF6D00)],
-      ).createShader(Rect.fromLTRB(sunsetX - 20, rect.top, sunsetX + 20, rect.bottom));
+        colors: [
+          const Color(0x00FF6D00),
+          const Color(0x33FF6D00),
+          const Color(0x00FF6D00)
+        ],
+      ).createShader(Rect.fromLTRB(
+          sunsetX - 20, rect.top, sunsetX + 20, rect.bottom));
     canvas.drawRect(
       Rect.fromLTRB(sunsetX - 20, rect.top, sunsetX + 20, rect.bottom),
       duskPaint,
@@ -142,11 +223,14 @@ class _TideChartPainter extends CustomPainter {
     // Horizontal grid lines (height)
     final step = ((maxH - minH) / 4).ceilToDouble();
     for (var h = (minH / step).ceil() * step; h <= maxH; h += step) {
-      final y = rect.bottom - ((h - minH) / (maxH - minH)) * rect.height;
-      canvas.drawLine(Offset(rect.left, y), Offset(rect.right, y), gridPaint);
+      final y =
+          rect.bottom - ((h - minH) / (maxH - minH)) * rect.height;
+      canvas.drawLine(
+          Offset(rect.left, y), Offset(rect.right, y), gridPaint);
 
       final tp = TextPainter(
-        text: TextSpan(text: '${h.toStringAsFixed(0)}m', style: textStyle),
+        text: TextSpan(
+            text: '${h.toStringAsFixed(0)}m', style: textStyle),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(canvas, Offset(rect.left - tp.width - 6, y - tp.height / 2));
@@ -155,33 +239,42 @@ class _TideChartPainter extends CustomPainter {
     // Vertical grid lines (time)
     for (var hour = 0; hour <= 24; hour += 6) {
       final x = rect.left + (hour / 24) * rect.width;
-      canvas.drawLine(Offset(x, rect.top), Offset(x, rect.bottom), gridPaint);
+      canvas.drawLine(
+          Offset(x, rect.top), Offset(x, rect.bottom), gridPaint);
     }
   }
 
-  void _drawTideCurve(Canvas canvas, Rect rect, double minH, double maxH) {
+  void _drawTideCurve(
+      Canvas canvas, Rect rect, double minH, double maxH) {
     if (hourlyLevels.length < 2) return;
 
     final path = Path();
     final fillPath = Path();
 
-    for (var i = 0; i < hourlyLevels.length; i++) {
+    // How far along the curve to draw (for animation)
+    final maxIndex =
+        ((hourlyLevels.length - 1) * drawProgress).round();
+
+    for (var i = 0; i <= maxIndex && i < hourlyLevels.length; i++) {
       final level = hourlyLevels[i];
-      final hour = level.dateTimeLocal.hour + level.dateTimeLocal.minute / 60.0;
+      final hour =
+          level.dateTimeLocal.hour + level.dateTimeLocal.minute / 60.0;
       final x = rect.left + (hour / 24) * rect.width;
-      final y = rect.bottom - ((level.heightMetres - minH) / (maxH - minH)) * rect.height;
+      final y = rect.bottom -
+          ((level.heightMetres - minH) / (maxH - minH)) * rect.height;
 
       if (i == 0) {
         path.moveTo(x, y);
         fillPath.moveTo(x, rect.bottom);
         fillPath.lineTo(x, y);
       } else {
-        // Smooth curve using cubic bezier
         final prevLevel = hourlyLevels[i - 1];
-        final prevHour = prevLevel.dateTimeLocal.hour + prevLevel.dateTimeLocal.minute / 60.0;
+        final prevHour = prevLevel.dateTimeLocal.hour +
+            prevLevel.dateTimeLocal.minute / 60.0;
         final prevX = rect.left + (prevHour / 24) * rect.width;
         final prevY = rect.bottom -
-            ((prevLevel.heightMetres - minH) / (maxH - minH)) * rect.height;
+            ((prevLevel.heightMetres - minH) / (maxH - minH)) *
+                rect.height;
 
         final midX = (prevX + x) / 2;
         path.cubicTo(midX, prevY, midX, y, x, y);
@@ -189,10 +282,14 @@ class _TideChartPainter extends CustomPainter {
       }
     }
 
-    // Close fill path
-    final lastHour = hourlyLevels.last.dateTimeLocal.hour +
-        hourlyLevels.last.dateTimeLocal.minute / 60.0;
-    fillPath.lineTo(rect.left + (lastHour / 24) * rect.width, rect.bottom);
+    // Close fill path at current draw position
+    if (maxIndex < hourlyLevels.length) {
+      final lastDrawn = hourlyLevels[maxIndex];
+      final lastHour = lastDrawn.dateTimeLocal.hour +
+          lastDrawn.dateTimeLocal.minute / 60.0;
+      fillPath.lineTo(
+          rect.left + (lastHour / 24) * rect.width, rect.bottom);
+    }
     fillPath.close();
 
     // Gradient fill
@@ -216,9 +313,11 @@ class _TideChartPainter extends CustomPainter {
     canvas.drawPath(path, strokePaint);
   }
 
-  void _drawExtremeMarkers(Canvas canvas, Rect rect, double minH, double maxH) {
+  void _drawExtremeMarkers(Canvas canvas, Rect rect, double minH,
+      double maxH, double alpha) {
     for (final event in tideEvents) {
-      final hour = event.dateTimeLocal.hour + event.dateTimeLocal.minute / 60.0;
+      final hour =
+          event.dateTimeLocal.hour + event.dateTimeLocal.minute / 60.0;
       final x = rect.left + (hour / 24) * rect.width;
       final y = rect.bottom -
           ((event.heightMetres - minH) / (maxH - minH)) * rect.height;
@@ -227,12 +326,23 @@ class _TideChartPainter extends CustomPainter {
       final dotColor = event.isHigh
           ? const Color(0xFF66BB6A)
           : const Color(0xFFEF5350);
-      canvas.drawCircle(Offset(x, y), 5, Paint()..color = dotColor);
+
+      // Glow effect
+      canvas.drawCircle(
+        Offset(x, y),
+        10,
+        Paint()
+          ..color = dotColor.withValues(alpha: 0.15 * alpha)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      );
+
+      canvas.drawCircle(
+          Offset(x, y), 5, Paint()..color = dotColor.withValues(alpha: alpha));
       canvas.drawCircle(
         Offset(x, y),
         5,
         Paint()
-          ..color = dotColor.withValues(alpha: 0.3)
+          ..color = dotColor.withValues(alpha: 0.3 * alpha)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2,
       );
@@ -247,7 +357,7 @@ class _TideChartPainter extends CustomPainter {
         text: TextSpan(
           text: '$label\n$timeStr',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.9),
+            color: Colors.white.withValues(alpha: 0.9 * alpha),
             fontSize: 9,
             height: 1.3,
           ),
@@ -267,7 +377,9 @@ class _TideChartPainter extends CustomPainter {
 
     for (var hour = 0; hour <= 24; hour += 6) {
       final x = rect.left + (hour / 24) * rect.width;
-      final label = hour == 24 ? '00:00' : '${hour.toString().padLeft(2, '0')}:00';
+      final label = hour == 24
+          ? '00:00'
+          : '${hour.toString().padLeft(2, '0')}:00';
       final tp = TextPainter(
         text: TextSpan(text: label, style: textStyle),
         textDirection: TextDirection.ltr,
@@ -285,7 +397,8 @@ class _TideChartPainter extends CustomPainter {
       final paint = Paint()
         ..color = Colors.white.withValues(alpha: 0.5)
         ..strokeWidth = 1;
-      canvas.drawLine(Offset(x, rect.top), Offset(x, rect.bottom), paint);
+      canvas.drawLine(
+          Offset(x, rect.top), Offset(x, rect.bottom), paint);
 
       // Small triangle at top
       final trianglePath = Path()
@@ -293,13 +406,130 @@ class _TideChartPainter extends CustomPainter {
         ..lineTo(x + 4, rect.top)
         ..lineTo(x, rect.top + 6)
         ..close();
-      canvas.drawPath(trianglePath, Paint()..color = Colors.white.withValues(alpha: 0.5));
+      canvas.drawPath(trianglePath,
+          Paint()..color = Colors.white.withValues(alpha: 0.5));
     }
+  }
+
+  void _drawTooltip(
+      Canvas canvas, Size size, Rect rect, double minH, double maxH) {
+    if (touchX == null || hourlyLevels.length < 2) return;
+
+    // Clamp touch to chart area
+    final clampedX = touchX!.clamp(rect.left, rect.right);
+    final fraction = (clampedX - rect.left) / rect.width;
+    final touchHour = fraction * 24;
+
+    // Interpolate height at touch position
+    double interpHeight = 0;
+    for (var i = 0; i < hourlyLevels.length - 1; i++) {
+      final h1 = hourlyLevels[i].dateTimeLocal.hour +
+          hourlyLevels[i].dateTimeLocal.minute / 60.0;
+      final h2 = hourlyLevels[i + 1].dateTimeLocal.hour +
+          hourlyLevels[i + 1].dateTimeLocal.minute / 60.0;
+      if (touchHour >= h1 && touchHour <= h2) {
+        final t = (touchHour - h1) / (h2 - h1);
+        interpHeight = hourlyLevels[i].heightMetres +
+            t *
+                (hourlyLevels[i + 1].heightMetres -
+                    hourlyLevels[i].heightMetres);
+        break;
+      }
+    }
+    // Handle edge: if beyond last point
+    if (touchHour >=
+        hourlyLevels.last.dateTimeLocal.hour +
+            hourlyLevels.last.dateTimeLocal.minute / 60.0) {
+      interpHeight = hourlyLevels.last.heightMetres;
+    }
+
+    final y = rect.bottom -
+        ((interpHeight - minH) / (maxH - minH)) * rect.height;
+
+    // Vertical tracking line
+    final linePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.3)
+      ..strokeWidth = 1;
+    canvas.drawLine(
+        Offset(clampedX, rect.top), Offset(clampedX, rect.bottom), linePaint);
+
+    // Tracking dot on curve
+    canvas.drawCircle(
+      Offset(clampedX, y),
+      7,
+      Paint()
+        ..color = const Color(0xFF42A5F5).withValues(alpha: 0.3)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
+    canvas.drawCircle(
+        Offset(clampedX, y), 5, Paint()..color = const Color(0xFF42A5F5));
+    canvas.drawCircle(
+      Offset(clampedX, y),
+      5,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.4)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+
+    // Tooltip bubble
+    final hour = touchHour.floor();
+    final minute = ((touchHour - hour) * 60).round();
+    final timeStr =
+        '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+    final heightStr = '${interpHeight.toStringAsFixed(1)}m';
+
+    final tp = TextPainter(
+      text: TextSpan(
+        text: '$timeStr  $heightStr',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final bubbleWidth = tp.width + 16;
+    final bubbleHeight = tp.height + 10;
+    // Position tooltip above the point, keep within bounds
+    var bubbleX = clampedX - bubbleWidth / 2;
+    bubbleX = bubbleX.clamp(rect.left, rect.right - bubbleWidth);
+    var bubbleY = y - bubbleHeight - 12;
+    if (bubbleY < rect.top) bubbleY = y + 12;
+
+    final bubbleRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(bubbleX, bubbleY, bubbleWidth, bubbleHeight),
+      const Radius.circular(8),
+    );
+
+    // Shadow
+    canvas.drawRRect(
+      bubbleRect.shift(const Offset(0, 2)),
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.4)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
+    // Background
+    canvas.drawRRect(bubbleRect, Paint()..color = const Color(0xFF1E3A5F));
+    // Border
+    canvas.drawRRect(
+      bubbleRect,
+      Paint()
+        ..color = const Color(0xFF42A5F5).withValues(alpha: 0.4)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+    // Text
+    tp.paint(canvas, Offset(bubbleX + 8, bubbleY + 5));
   }
 
   @override
   bool shouldRepaint(covariant _TideChartPainter oldDelegate) {
     return oldDelegate.hourlyLevels != hourlyLevels ||
-        oldDelegate.tideEvents != tideEvents;
+        oldDelegate.tideEvents != tideEvents ||
+        oldDelegate.touchX != touchX ||
+        oldDelegate.drawProgress != drawProgress;
   }
 }

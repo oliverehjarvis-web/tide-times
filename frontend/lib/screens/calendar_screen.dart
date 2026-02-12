@@ -18,16 +18,28 @@ class CalendarScreen extends StatefulWidget {
   State<CalendarScreen> createState() => _CalendarScreenState();
 }
 
-class _CalendarScreenState extends State<CalendarScreen> {
+class _CalendarScreenState extends State<CalendarScreen>
+    with SingleTickerProviderStateMixin {
   late DateTime _currentMonth;
   Map<String, List<TideEvent>> _monthTides = {};
   bool _loading = true;
+  late AnimationController _gridAnimController;
 
   @override
   void initState() {
     super.initState();
     _currentMonth = DateTime(DateTime.now().year, DateTime.now().month);
+    _gridAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
     _loadMonth();
+  }
+
+  @override
+  void dispose() {
+    _gridAnimController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadMonth() async {
@@ -41,6 +53,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _monthTides = data;
         _loading = false;
       });
+      _gridAnimController.forward(from: 0);
     } catch (e) {
       setState(() => _loading = false);
     }
@@ -64,6 +77,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.locationName),
+        backgroundColor: const Color(0xFF0a1628),
+        surfaceTintColor: Colors.transparent,
       ),
       body: SafeArea(
         child: Column(
@@ -81,7 +96,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   ),
                   GestureDetector(
                     onTap: () {
-                      // Jump to current month
                       setState(() {
                         _currentMonth = DateTime(
                             DateTime.now().year, DateTime.now().month);
@@ -158,83 +172,123 @@ class _CalendarScreenState extends State<CalendarScreen> {
         DateTime(_currentMonth.year, _currentMonth.month, 1).weekday;
     final today = DateTime.now();
     final totalCells = daysInMonth + firstWeekday - 1;
-    // Round up to full weeks
     final rows = ((totalCells) / 7).ceil();
     final cellCount = rows * 7;
 
-    return GridView.builder(
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 7,
-        childAspectRatio: 0.48,
-        crossAxisSpacing: 3,
-        mainAxisSpacing: 3,
-      ),
-      itemCount: cellCount,
-      itemBuilder: (context, index) {
-        if (index < firstWeekday - 1 || index >= daysInMonth + firstWeekday - 1) {
-          return const SizedBox();
-        }
+    // Responsive aspect ratio based on screen height
+    final screenHeight = MediaQuery.of(context).size.height;
+    final availableHeight = screenHeight - 200; // approx space for header/nav
+    final cellHeight = availableHeight / rows;
+    final cellWidth = (MediaQuery.of(context).size.width - 8) / 7;
+    final aspectRatio = (cellWidth / cellHeight).clamp(0.35, 0.7);
 
-        final day = index - firstWeekday + 2;
-        final date = DateTime(_currentMonth.year, _currentMonth.month, day);
-        final dateStr =
-            '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-        final tides = _monthTides[dateStr] ?? [];
-        final isToday = date.year == today.year &&
-            date.month == today.month &&
-            date.day == today.day;
-        final isPast = date.isBefore(DateTime(today.year, today.month, today.day));
+    return AnimatedBuilder(
+      animation: _gridAnimController,
+      builder: (context, _) {
+        return Opacity(
+          opacity: _gridAnimController.value,
+          child: GridView.builder(
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              childAspectRatio: aspectRatio,
+              crossAxisSpacing: 3,
+              mainAxisSpacing: 3,
+            ),
+            itemCount: cellCount,
+            itemBuilder: (context, index) {
+              if (index < firstWeekday - 1 ||
+                  index >= daysInMonth + firstWeekday - 1) {
+                return const SizedBox();
+              }
 
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => DayDetailScreen(
-                    locationId: widget.locationId,
-                    locationName: widget.locationName,
-                    date: date,
+              final day = index - firstWeekday + 2;
+              final date =
+                  DateTime(_currentMonth.year, _currentMonth.month, day);
+              final dateStr =
+                  '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+              final tides = _monthTides[dateStr] ?? [];
+              final isToday = date.year == today.year &&
+                  date.month == today.month &&
+                  date.day == today.day;
+              final isPast =
+                  date.isBefore(DateTime(today.year, today.month, today.day));
+
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      PageRouteBuilder(
+                        pageBuilder: (_, __, ___) => DayDetailScreen(
+                          locationId: widget.locationId,
+                          locationName: widget.locationName,
+                          date: date,
+                        ),
+                        transitionsBuilder: (_, anim, __, child) {
+                          return FadeTransition(
+                            opacity: anim,
+                            child: SlideTransition(
+                              position: Tween(
+                                begin: const Offset(0, 0.05),
+                                end: Offset.zero,
+                              ).animate(CurvedAnimation(
+                                parent: anim,
+                                curve: Curves.easeOutCubic,
+                              )),
+                              child: child,
+                            ),
+                          );
+                        },
+                        transitionDuration:
+                            const Duration(milliseconds: 300),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isToday
+                          ? const Color(0xFF1565C0).withValues(alpha: 0.25)
+                          : const Color(0xFF132040)
+                              .withValues(alpha: isPast ? 0.5 : 1.0),
+                      borderRadius: BorderRadius.circular(8),
+                      border: isToday
+                          ? Border.all(
+                              color: const Color(0xFF42A5F5), width: 1.5)
+                          : null,
+                    ),
+                    child: Column(
+                      children: [
+                        // Day number
+                        Text(
+                          '$day',
+                          style: TextStyle(
+                            color: isToday
+                                ? const Color(0xFF42A5F5)
+                                : isPast
+                                    ? Colors.white38
+                                    : Colors.white70,
+                            fontSize: 13,
+                            fontWeight:
+                                isToday ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        // Tide events
+                        ...tides
+                            .take(4)
+                            .map((t) => _buildTideMini(t, isPast)),
+                      ],
+                    ),
                   ),
                 ),
               );
             },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-              decoration: BoxDecoration(
-                color: isToday
-                    ? const Color(0xFF1565C0).withValues(alpha: 0.25)
-                    : const Color(0xFF132040).withValues(alpha: isPast ? 0.5 : 1.0),
-                borderRadius: BorderRadius.circular(8),
-                border: isToday
-                    ? Border.all(color: const Color(0xFF42A5F5), width: 1.5)
-                    : null,
-              ),
-              child: Column(
-                children: [
-                  // Day number
-                  Text(
-                    '$day',
-                    style: TextStyle(
-                      color: isToday
-                          ? const Color(0xFF42A5F5)
-                          : isPast
-                              ? Colors.white38
-                              : Colors.white70,
-                      fontSize: 13,
-                      fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  // Tide events
-                  ...tides.take(4).map((t) => _buildTideMini(t, isPast)),
-                ],
-              ),
-            ),
           ),
         );
       },

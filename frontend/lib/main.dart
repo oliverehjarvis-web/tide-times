@@ -31,10 +31,14 @@ class TideTimesApp extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
             ),
             elevation: 0,
+            surfaceTintColor: Colors.transparent,
           ),
           appBarTheme: const AppBarTheme(
             backgroundColor: Color(0xFF0a1628),
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
             elevation: 0,
+            scrolledUnderElevation: 0,
             centerTitle: false,
           ),
           tabBarTheme: TabBarTheme(
@@ -42,6 +46,7 @@ class TideTimesApp extends StatelessWidget {
             unselectedLabelColor: Colors.white54,
             indicatorColor: const Color(0xFF42A5F5),
             dividerColor: Colors.transparent,
+            overlayColor: WidgetStateProperty.all(Colors.white10),
             labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
             unselectedLabelStyle: const TextStyle(fontSize: 14),
           ),

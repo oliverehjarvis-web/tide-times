@@ -22,17 +22,29 @@ class DayDetailScreen extends StatefulWidget {
   State<DayDetailScreen> createState() => _DayDetailScreenState();
 }
 
-class _DayDetailScreenState extends State<DayDetailScreen> {
+class _DayDetailScreenState extends State<DayDetailScreen>
+    with SingleTickerProviderStateMixin {
   DayTideData? _data;
   bool _loading = true;
   late DateTime _currentDate;
   bool _hourlyExpanded = false;
+  late AnimationController _contentAnimController;
 
   @override
   void initState() {
     super.initState();
     _currentDate = widget.date;
+    _contentAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _contentAnimController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -44,6 +56,7 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
         _data = data;
         _loading = false;
       });
+      _contentAnimController.forward(from: 0);
     } catch (e) {
       setState(() => _loading = false);
     }
@@ -71,6 +84,8 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.locationName),
+        backgroundColor: const Color(0xFF0a1628),
+        surfaceTintColor: Colors.transparent,
       ),
       body: SafeArea(
         child: Column(
@@ -144,64 +159,97 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
   }
 
   Widget _buildContent() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Tide chart
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(
-                      'Tide Height',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWide = screenWidth > 600;
+    final hPad = isWide ? 24.0 : 16.0;
+
+    return AnimatedBuilder(
+      animation: _contentAnimController,
+      builder: (context, _) {
+        return Opacity(
+          opacity: _contentAnimController.value,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(hPad, 8, hPad, 32),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Tide chart - interactive
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Tide Height',
+                                    style: TextStyle(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.6),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Tap chart for details',
+                                    style: TextStyle(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.3),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            TideChart(
+                              hourlyLevels: _data!.hourlyLevels,
+                              tideEvents: _data!.tides,
+                              sunTimes: _data!.sunTimes,
+                              height: 220,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  TideChart(
-                    hourlyLevels: _data!.hourlyLevels,
-                    tideEvents: _data!.tides,
-                    sunTimes: _data!.sunTimes,
-                    height: 220,
-                  ),
-                ],
+                    const SizedBox(height: 16),
+
+                    // Tide events
+                    _buildSectionLabel('Tides'),
+                    const SizedBox(height: 8),
+                    ..._data!.tides.map((event) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: TideCard(event: event),
+                        )),
+
+                    const SizedBox(height: 12),
+
+                    // Sun times
+                    if (_data!.sunTimes != null) ...[
+                      _buildSectionLabel('Daylight'),
+                      const SizedBox(height: 8),
+                      SunTimesBar(sunTimes: _data!.sunTimes!),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Collapsible hourly levels
+                    if (_data!.hourlyLevels.isNotEmpty) _buildHourlySection(),
+                  ],
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 16),
-
-          // Tide events
-          _buildSectionLabel('Tides'),
-          const SizedBox(height: 8),
-          ..._data!.tides.map((event) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: TideCard(event: event),
-              )),
-
-          const SizedBox(height: 12),
-
-          // Sun times
-          if (_data!.sunTimes != null) ...[
-            _buildSectionLabel('Daylight'),
-            const SizedBox(height: 8),
-            SunTimesBar(sunTimes: _data!.sunTimes!),
-            const SizedBox(height: 12),
-          ],
-
-          // Collapsible hourly levels
-          if (_data!.hourlyLevels.isNotEmpty) _buildHourlySection(),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -211,10 +259,13 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
         children: [
           // Header / toggle
           InkWell(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            onTap: () => setState(() => _hourlyExpanded = !_hourlyExpanded),
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(16)),
+            onTap: () =>
+                setState(() => _hourlyExpanded = !_hourlyExpanded),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 14),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -226,12 +277,14 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  Icon(
-                    _hourlyExpanded
-                        ? Icons.expand_less_rounded
-                        : Icons.expand_more_rounded,
-                    color: Colors.white38,
-                    size: 22,
+                  AnimatedRotation(
+                    turns: _hourlyExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 250),
+                    child: Icon(
+                      Icons.expand_more_rounded,
+                      color: Colors.white38,
+                      size: 22,
+                    ),
                   ),
                 ],
               ),

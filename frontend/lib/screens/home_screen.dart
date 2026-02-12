@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
@@ -16,8 +18,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TabController _tabController;
+  late AnimationController _contentAnimController;
+  late AnimationController _waveAnimController;
+  Timer? _countdownTimer;
   final _locations = [
     Location(
         id: 'newquay',
@@ -54,12 +59,29 @@ class _HomeScreenState extends State<HomeScreen>
         _loadData();
       }
     });
+    _contentAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _waveAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3000),
+    )..repeat();
+    _countdownTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) {
+        if (mounted) setState(() {});
+      },
+    );
     _loadData();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _contentAnimController.dispose();
+    _waveAnimController.dispose();
+    _countdownTimer?.cancel();
     super.dispose();
   }
 
@@ -77,6 +99,7 @@ class _HomeScreenState extends State<HomeScreen>
         _todayData = data;
         _loading = false;
       });
+      _contentAnimController.forward(from: 0);
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -111,6 +134,10 @@ class _HomeScreenState extends State<HomeScreen>
             SliverAppBar(
               floating: true,
               snap: true,
+              backgroundColor: const Color(0xFF0a1628),
+              surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              scrolledUnderElevation: 0,
               title: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -140,11 +167,29 @@ class _HomeScreenState extends State<HomeScreen>
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => CalendarScreen(
+                      PageRouteBuilder(
+                        pageBuilder: (_, __, ___) => CalendarScreen(
                           locationId: _locations[_tabController.index].id,
-                          locationName: _locations[_tabController.index].name,
+                          locationName:
+                              _locations[_tabController.index].name,
                         ),
+                        transitionsBuilder: (_, anim, __, child) {
+                          return FadeTransition(
+                            opacity: anim,
+                            child: SlideTransition(
+                              position: Tween(
+                                begin: const Offset(0, 0.05),
+                                end: Offset.zero,
+                              ).animate(CurvedAnimation(
+                                parent: anim,
+                                curve: Curves.easeOutCubic,
+                              )),
+                              child: child,
+                            ),
+                          );
+                        },
+                        transitionDuration:
+                            const Duration(milliseconds: 300),
                       ),
                     );
                   },
@@ -203,44 +248,85 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildContent() {
     if (_todayData == null) return const SizedBox();
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWide = screenWidth > 600;
+    final hPad = isWide ? 24.0 : 16.0;
+
     return RefreshIndicator(
       onRefresh: _loadData,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Date header
-            _buildDateHeader(),
-            const SizedBox(height: 12),
+        padding: EdgeInsets.fromLTRB(hPad, 12, hPad, 32),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Date header
+                _staggeredItem(0, _buildDateHeader()),
+                const SizedBox(height: 12),
 
-            // Next tide countdown
-            _buildNextTideHero(),
-            const SizedBox(height: 16),
+                // Next tide countdown
+                _staggeredItem(1, _buildNextTideHero()),
+                const SizedBox(height: 16),
 
-            // Tide chart
-            _buildChartCard(),
-            const SizedBox(height: 16),
+                // Tide chart
+                _staggeredItem(2, _buildChartCard()),
+                const SizedBox(height: 16),
 
-            // Tide events
-            _buildSectionLabel('Today\'s Tides'),
-            const SizedBox(height: 8),
-            ..._todayData!.tides.map((event) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: TideCard(event: event),
-                )),
-            const SizedBox(height: 12),
+                // Tide events
+                _staggeredItem(3, _buildSectionLabel('Today\'s Tides')),
+                const SizedBox(height: 8),
+                ..._todayData!.tides.asMap().entries.map((entry) =>
+                    _staggeredItem(
+                      4 + entry.key,
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: TideCard(event: entry.value),
+                      ),
+                    )),
+                const SizedBox(height: 12),
 
-            // Sun times
-            if (_todayData!.sunTimes != null) ...[
-              _buildSectionLabel('Daylight'),
-              const SizedBox(height: 8),
-              SunTimesBar(sunTimes: _todayData!.sunTimes!),
-            ],
-          ],
+                // Sun times
+                if (_todayData!.sunTimes != null) ...[
+                  _staggeredItem(
+                    4 + _todayData!.tides.length,
+                    _buildSectionLabel('Daylight'),
+                  ),
+                  const SizedBox(height: 8),
+                  _staggeredItem(
+                    5 + _todayData!.tides.length,
+                    SunTimesBar(sunTimes: _todayData!.sunTimes!),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
+    );
+  }
+
+  /// Wraps a child in a staggered slide+fade animation
+  Widget _staggeredItem(int index, Widget child) {
+    final delay = (index * 0.08).clamp(0.0, 0.6);
+    final end = (delay + 0.5).clamp(0.0, 1.0);
+    final animation = CurvedAnimation(
+      parent: _contentAnimController,
+      curve: Interval(delay, end, curve: Curves.easeOutCubic),
+    );
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        return Opacity(
+          opacity: animation.value,
+          child: Transform.translate(
+            offset: Offset(0, 20 * (1 - animation.value)),
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -288,77 +374,103 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     final isHigh = nextTide.isHigh;
-    final color = isHigh ? const Color(0xFF66BB6A) : const Color(0xFF42A5F5);
+    final color =
+        isHigh ? const Color(0xFF66BB6A) : const Color(0xFF42A5F5);
     final label = isHigh ? 'Next High Tide' : 'Next Low Tide';
     final timeStr =
         '${nextTide.dateTimeLocal.hour.toString().padLeft(2, '0')}:${nextTide.dateTimeLocal.minute.toString().padLeft(2, '0')}';
 
     return GestureDetector(
       onTap: () => _openDayDetail(DateTime.now()),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              color.withValues(alpha: 0.2),
-              color.withValues(alpha: 0.08),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.15)),
-        ),
-        child: Row(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            // Wave animation background
+            AnimatedBuilder(
+              animation: _waveAnimController,
+              builder: (context, _) {
+                return CustomPaint(
+                  painter: _WavePainter(
+                    progress: _waveAnimController.value,
+                    color: color,
+                  ),
+                  child: const SizedBox(
+                    width: double.infinity,
+                    height: 110,
+                  ),
+                );
+              },
+            ),
+            // Content overlay
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    color.withValues(alpha: 0.15),
+                    color.withValues(alpha: 0.05),
+                  ],
+                ),
+                border: Border.all(color: color.withValues(alpha: 0.15)),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
                 children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label,
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          timeStr,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 32,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${nextTide.heightMetres.toStringAsFixed(1)}m',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.6),
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    timeStr,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.5,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${nextTide.heightMetres.toStringAsFixed(1)}m',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
-                      fontSize: 15,
+                    child: Text(
+                      'in ${_formatCountdown(nextTide)}',
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                'in ${_formatCountdown(nextTide)}',
-                style: TextStyle(
-                  color: color,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
               ),
             ),
           ],
@@ -437,13 +549,79 @@ class _HomeScreenState extends State<HomeScreen>
   void _openDayDetail(DateTime date) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => DayDetailScreen(
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => DayDetailScreen(
           locationId: _locations[_tabController.index].id,
           locationName: _locations[_tabController.index].name,
           date: date,
         ),
+        transitionsBuilder: (_, anim, __, child) {
+          return FadeTransition(
+            opacity: anim,
+            child: SlideTransition(
+              position: Tween(
+                begin: const Offset(0, 0.05),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: anim,
+                curve: Curves.easeOutCubic,
+              )),
+              child: child,
+            ),
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 300),
       ),
     );
+  }
+}
+
+/// Paints gentle animated waves at the bottom of the hero card
+class _WavePainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  _WavePainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.06)
+      ..style = PaintingStyle.fill;
+
+    // Wave 1
+    final path1 = Path();
+    path1.moveTo(0, size.height);
+    for (var x = 0.0; x <= size.width; x += 1) {
+      final y = size.height * 0.65 +
+          math.sin((x / size.width * 2 * math.pi) + (progress * 2 * math.pi)) *
+              8;
+      path1.lineTo(x, y);
+    }
+    path1.lineTo(size.width, size.height);
+    path1.close();
+    canvas.drawPath(path1, paint);
+
+    // Wave 2 (offset)
+    final paint2 = Paint()
+      ..color = color.withValues(alpha: 0.04)
+      ..style = PaintingStyle.fill;
+    final path2 = Path();
+    path2.moveTo(0, size.height);
+    for (var x = 0.0; x <= size.width; x += 1) {
+      final y = size.height * 0.75 +
+          math.sin(
+                  (x / size.width * 3 * math.pi) + (progress * 2 * math.pi) + 1.5) *
+              6;
+      path2.lineTo(x, y);
+    }
+    path2.lineTo(size.width, size.height);
+    path2.close();
+    canvas.drawPath(path2, paint2);
+  }
+
+  @override
+  bool shouldRepaint(covariant _WavePainter oldDelegate) {
+    return oldDelegate.progress != progress;
   }
 }
