@@ -102,6 +102,24 @@ class _TideChartPainter extends CustomPainter {
     this.drawProgress = 1.0,
   });
 
+  /// Get the UTC hour offset from midnight UTC of the first data point's date.
+  /// This ensures monotonic x-positions even across DST boundaries.
+  double _utcHour(DateTime utcTime) {
+    return utcTime.hour + utcTime.minute / 60.0;
+  }
+
+  /// For tide events, calculate UTC hour relative to the hourly data's
+  /// start date to handle events that span midnight correctly.
+  double _eventUtcHour(TideEvent event) {
+    if (hourlyLevels.isEmpty) return _utcHour(event.dateTimeUtc);
+    final baseDate = DateTime.utc(
+      hourlyLevels.first.dateTimeUtc.year,
+      hourlyLevels.first.dateTimeUtc.month,
+      hourlyLevels.first.dateTimeUtc.day,
+    );
+    return event.dateTimeUtc.difference(baseDate).inMinutes / 60.0;
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     if (hourlyLevels.isEmpty) return;
@@ -256,24 +274,22 @@ class _TideChartPainter extends CustomPainter {
         ((hourlyLevels.length - 1) * drawProgress).round();
 
     for (var i = 0; i <= maxIndex && i < hourlyLevels.length; i++) {
-      final level = hourlyLevels[i];
-      final hour =
-          level.dateTimeLocal.hour + level.dateTimeLocal.minute / 60.0;
+      // Use index-based positioning: 25 points map to hours 0-24
+      final hour = i * 24.0 / (hourlyLevels.length - 1);
       final x = rect.left + (hour / 24) * rect.width;
       final y = rect.bottom -
-          ((level.heightMetres - minH) / (maxH - minH)) * rect.height;
+          ((hourlyLevels[i].heightMetres - minH) / (maxH - minH)) *
+              rect.height;
 
       if (i == 0) {
         path.moveTo(x, y);
         fillPath.moveTo(x, rect.bottom);
         fillPath.lineTo(x, y);
       } else {
-        final prevLevel = hourlyLevels[i - 1];
-        final prevHour = prevLevel.dateTimeLocal.hour +
-            prevLevel.dateTimeLocal.minute / 60.0;
+        final prevHour = (i - 1) * 24.0 / (hourlyLevels.length - 1);
         final prevX = rect.left + (prevHour / 24) * rect.width;
         final prevY = rect.bottom -
-            ((prevLevel.heightMetres - minH) / (maxH - minH)) *
+            ((hourlyLevels[i - 1].heightMetres - minH) / (maxH - minH)) *
                 rect.height;
 
         final midX = (prevX + x) / 2;
@@ -284,9 +300,7 @@ class _TideChartPainter extends CustomPainter {
 
     // Close fill path at current draw position
     if (maxIndex < hourlyLevels.length) {
-      final lastDrawn = hourlyLevels[maxIndex];
-      final lastHour = lastDrawn.dateTimeLocal.hour +
-          lastDrawn.dateTimeLocal.minute / 60.0;
+      final lastHour = maxIndex * 24.0 / (hourlyLevels.length - 1);
       fillPath.lineTo(
           rect.left + (lastHour / 24) * rect.width, rect.bottom);
     }
@@ -316,8 +330,9 @@ class _TideChartPainter extends CustomPainter {
   void _drawExtremeMarkers(Canvas canvas, Rect rect, double minH,
       double maxH, double alpha) {
     for (final event in tideEvents) {
-      final hour =
-          event.dateTimeLocal.hour + event.dateTimeLocal.minute / 60.0;
+      // Use UTC hour for positioning to avoid DST wrapping
+      final hour = _eventUtcHour(event);
+      if (hour < 0 || hour > 24) continue; // skip out-of-range events
       final x = rect.left + (hour / 24) * rect.width;
       final y = rect.bottom -
           ((event.heightMetres - minH) / (maxH - minH)) * rect.height;
@@ -347,7 +362,7 @@ class _TideChartPainter extends CustomPainter {
           ..strokeWidth = 2,
       );
 
-      // Label
+      // Label - show LOCAL time for display
       final timeStr =
           '${event.dateTimeLocal.hour.toString().padLeft(2, '0')}:${event.dateTimeLocal.minute.toString().padLeft(2, '0')}';
       final label = '${event.heightMetres.toStringAsFixed(1)}m';
@@ -418,33 +433,28 @@ class _TideChartPainter extends CustomPainter {
     // Clamp touch to chart area
     final clampedX = touchX!.clamp(rect.left, rect.right);
     final fraction = (clampedX - rect.left) / rect.width;
-    final touchHour = fraction * 24;
 
-    // Interpolate height at touch position
-    double interpHeight = 0;
-    for (var i = 0; i < hourlyLevels.length - 1; i++) {
-      final h1 = hourlyLevels[i].dateTimeLocal.hour +
-          hourlyLevels[i].dateTimeLocal.minute / 60.0;
-      final h2 = hourlyLevels[i + 1].dateTimeLocal.hour +
-          hourlyLevels[i + 1].dateTimeLocal.minute / 60.0;
-      if (touchHour >= h1 && touchHour <= h2) {
-        final t = (touchHour - h1) / (h2 - h1);
-        interpHeight = hourlyLevels[i].heightMetres +
-            t *
-                (hourlyLevels[i + 1].heightMetres -
-                    hourlyLevels[i].heightMetres);
-        break;
-      }
-    }
-    // Handle edge: if beyond last point
-    if (touchHour >=
-        hourlyLevels.last.dateTimeLocal.hour +
-            hourlyLevels.last.dateTimeLocal.minute / 60.0) {
-      interpHeight = hourlyLevels.last.heightMetres;
-    }
+    // Map fraction to data index (0 to length-1)
+    final exactIndex = fraction * (hourlyLevels.length - 1);
+    final i0 = exactIndex.floor().clamp(0, hourlyLevels.length - 2);
+    final i1 = i0 + 1;
+    final t = exactIndex - i0;
+
+    // Interpolate height between the two bracketing data points
+    final interpHeight = hourlyLevels[i0].heightMetres +
+        t * (hourlyLevels[i1].heightMetres - hourlyLevels[i0].heightMetres);
 
     final y = rect.bottom -
         ((interpHeight - minH) / (maxH - minH)) * rect.height;
+
+    // Interpolate local time for display
+    final localMs0 =
+        hourlyLevels[i0].dateTimeLocal.millisecondsSinceEpoch.toDouble();
+    final localMs1 =
+        hourlyLevels[i1].dateTimeLocal.millisecondsSinceEpoch.toDouble();
+    final interpMs = localMs0 + t * (localMs1 - localMs0);
+    final interpLocal =
+        DateTime.fromMillisecondsSinceEpoch(interpMs.round());
 
     // Vertical tracking line
     final linePaint = Paint()
@@ -472,11 +482,9 @@ class _TideChartPainter extends CustomPainter {
         ..strokeWidth = 1.5,
     );
 
-    // Tooltip bubble
-    final hour = touchHour.floor();
-    final minute = ((touchHour - hour) * 60).round();
+    // Tooltip bubble - show local time
     final timeStr =
-        '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+        '${interpLocal.hour.toString().padLeft(2, '0')}:${interpLocal.minute.toString().padLeft(2, '0')}';
     final heightStr = '${interpHeight.toStringAsFixed(1)}m';
 
     final tp = TextPainter(
